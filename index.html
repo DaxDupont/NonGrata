@@ -1,0 +1,205 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Persona Non Grata List</title>
+    <style>
+        body {
+            font-family: system-ui, sans-serif;
+            max-width: 1000px;
+            margin: 40px auto;
+            padding: 20px;
+            background: #1a202c;
+            color: #edf2f7;
+        }
+        .header-section {
+            margin-bottom: 30px;
+        }
+        .description {
+            background: #2d3748;
+            padding: 20px;
+            border-radius: 8px;
+            border-left: 4px solid #fc8181;
+            margin-bottom: 25px;
+            line-height: 1.6;
+        }
+        .lsl-notice {
+            margin-top: 10px;
+            display: block;
+            color: #63b3ed;
+            font-weight: bold;
+            font-size: 0.9em;
+        }
+        .search-box {
+            width: 100%;
+            padding: 12px;
+            margin-bottom: 20px;
+            border: 1px solid #4a5568;
+            border-radius: 8px;
+            font-size: 16px;
+            box-sizing: border-box;
+            background: #2d3748;
+            color: white;
+        }
+        .search-box::placeholder { color: #a0aec0; }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            background: #2d3748;
+            border-radius: 8px;
+            overflow: hidden;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.3);
+        }
+        th, td { padding: 12px 15px; text-align: left; border-bottom: 1px solid #4a5568; }
+        th { background: #4a5568; color: #edf2f7; }
+        tr.user-row { cursor: pointer; transition: background 0.1s; }
+        tr.user-row:hover { background: #3d495d; }
+
+        #modalOverlay {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.75);
+            z-index: 10;
+        }
+        #detailsModal {
+            display: none;
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: #2d3748;
+            padding: 30px;
+            border-radius: 12px;
+            width: 90%;
+            max-width: 600px;
+            max-height: 80vh;
+            overflow-y: auto;
+            z-index: 11;
+            box-shadow: 0 20px 25px rgba(0,0,0,0.5);
+            color: #edf2f7;
+        }
+
+        .close-btn { float: right; cursor: pointer; font-size: 24px; color: #a0aec0; }
+        .close-btn:hover { color: #edf2f7; }
+        .detail-item { margin-bottom: 15px; padding-bottom: 10px; border-bottom: 1px solid #4a5568; }
+        .detail-label { font-weight: bold; color: #a0aec0; font-size: 0.8em; text-transform: uppercase; margin-bottom: 5px; display: block; }
+
+        #m-evidence {
+            white-space: pre-wrap;
+            word-break: break-word;
+            background: #1a202c;
+            padding: 12px;
+            border-radius: 6px;
+            font-family: 'Courier New', Courier, monospace;
+            font-size: 0.9em;
+            color: #e2e8f0;
+            border: 1px solid #4a5568;
+            line-height: 1.4;
+        }
+        .evidence-link { color: #63b3ed; text-decoration: underline; word-break: break-all; font-family: system-ui, sans-serif; }
+    </style>
+</head>
+<body>
+
+<div class="header-section">
+    <h2>Persona Non Grata List</h2>
+    <div class="description">
+        This directory serves as a central repository for tracking individuals documented for griefing, racism, or transphobia. Our goal is to maintain a safer environment for all residents by sharing transparent evidence of harmful behavior.
+        <span class="lsl-notice">Coming Soon: An LSL script will be provided for region owners to automatically pull this data and automate bans in-world.</span>
+    </div>
+</div>
+
+<input type="text" id="filterInput" class="search-box" placeholder="Filter users by name or UUID...">
+
+<table>
+    <thead>
+    <tr>
+        <th>Username</th>
+        <th>UUID</th>
+        <th>Main Reason</th>
+    </tr>
+    </thead>
+    <tbody id="userTableBody"></tbody>
+</table>
+
+<div id="modalOverlay" onclick="closeModal()"></div>
+<div id="detailsModal">
+    <span class="close-btn" onclick="closeModal()">&times;</span>
+    <h2 id="m-user"></h2>
+    <div class="detail-item"><span class="detail-label">UUID</span><div id="m-uuid" style="font-family: monospace;"></div></div>
+    <div class="detail-item"><span class="detail-label">Reason</span><div id="m-reason" style="color: #fc8181; font-weight:bold;"></div></div>
+    <div class="detail-item"><span class="detail-label">Date Added</span><div id="m-date"></div></div>
+    <div class="detail-item"><span class="detail-label">Evidence / Chatlog</span><div id="m-evidence"></div></div>
+    <div class="detail-item" style="border:none;"><span class="detail-label">Internal Notes</span><div id="m-notes"></div></div>
+</div>
+
+<script>
+	let tableData = [];
+
+	async function init() {
+		try {
+			const res = await fetch('data.json?t=' + Date.now());
+			tableData = await res.json();
+			renderTable(tableData);
+		} catch (e) {
+			document.getElementById('userTableBody').innerHTML = "<tr><td colspan='3' style='color: #fc8181;'>Error loading data.</td></tr>";
+		}
+	}
+
+	function renderTable(list) {
+		const tbody = document.getElementById('userTableBody');
+		tbody.innerHTML = list.map(u => `
+                <tr class="user-row" onclick="fetchDetails('${u.uuid}')">
+                    <td><strong>${u.username}</strong></td>
+                    <td style="font-family: monospace; color: #a0aec0;">${u.uuid}</td>
+                    <td>${u.reason}</td>
+                </tr>
+            `).join('');
+	}
+
+	async function fetchDetails(uuid) {
+		try {
+			const res = await fetch(`api/${uuid}.json?t=` + Date.now());
+			const u = await res.json();
+
+			document.getElementById('m-user').innerText = u.username;
+			document.getElementById('m-uuid').innerText = u.uuid;
+			document.getElementById('m-reason').innerText = u.reason;
+			document.getElementById('m-date').innerText = u.details.date;
+
+			const evidenceContainer = document.getElementById('m-evidence');
+			const evidenceValue = u.details.evidence_link;
+
+			if (evidenceValue && (evidenceValue.startsWith('http://') || evidenceValue.startsWith('https://'))) {
+				evidenceContainer.innerHTML = `<a href="${evidenceValue}" target="_blank" rel="noopener noreferrer" class="evidence-link">${evidenceValue}</a>`;
+			} else {
+				evidenceContainer.innerText = evidenceValue || 'No evidence provided.';
+			}
+
+			document.getElementById('m-notes').innerText = u.details.notes || 'No notes.';
+
+			document.getElementById('modalOverlay').style.display = 'block';
+			document.getElementById('detailsModal').style.display = 'block';
+		} catch (e) {
+			alert("Error loading details for this user.");
+		}
+	}
+
+	function closeModal() {
+		document.getElementById('modalOverlay').style.display = 'none';
+		document.getElementById('detailsModal').style.display = 'none';
+	}
+
+	document.getElementById('filterInput').addEventListener('input', (e) => {
+		const val = e.target.value.toLowerCase();
+		renderTable(tableData.filter(u => u.username.toLowerCase().includes(val) || u.uuid.toLowerCase().includes(val)));
+	});
+
+	init();
+</script>
+</body>
+</html>
